@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Control Logístico de Campo</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="apple-touch-icon" href="./assets/icon-192.png">
+</head>
+<body>
+  <main id="app-container">
+    <section id="view-inventario" class="app-view active">
+      <h1><i class="fa-solid fa-boxes-stacked"></i> Gestión de Activos</h1>
+      <div class="sub-tabs">
+        <button class="tab-btn active" onclick="switchSubTab('materiales')">Materiales</button>
+        <button class="tab-btn" onclick="switchSubTab('vehiculos')">Vehículos</button>
+        <button class="tab-btn" onclick="switchSubTab('almacenes')">Almacenes</button>
+        <button class="tab-btn" onclick="switchSubTab('eventos')">Eventos</button>
+      </div>
+
+      <!-- NUEVO: Barra unificada de filtros dinámicos (Mobile-First) -->
+      <div class="filter-container">
+        <div class="filter-row">
+          <input type="text" id="txt-filtro-buscar" class="form-control" placeholder="Buscar por texto..." oninput="renderizarPestañaActivaInventario()">
+          <input type="date" id="txt-filtro-fecha" class="form-control" style="display:none;" onchange="renderizarPestañaActivaInventario()">
+        </div>
+      </div>
+
+      <div id="inventario-contenido"></div>
+      <button class="btn btn-primary" style="margin-top: 14px;" onclick="abrirModalAlta()"><i class="fa-solid fa-plus"></i> Dar de Alta Activo</button>
+    </section>
+
+    <section id="view-mapa" class="app-view">
+      <h1><i class="fa-solid fa-map-location-dot"></i> Mapa de Operaciones</h1>
+      <div id="map"></div>
+
+      <!-- NUEVO: Instrucciones de experiencia de usuario en mapa -->
+      <div class="map-instructions">
+        <i class="fa-solid fa-circle-info"></i> <span>Pulsa en cualquier punto del mapa para fundar un evento ahí.</span>
+      </div>
+
+      <h2>Eventos Activos Registrados</h2>
+      <div id="lista-eventos-mapa"></div>
+    </section>
+
+    <section id="view-operaciones" class="app-view">
+      <h1><i class="fa-solid fa-right-left"></i> Despliegue de Material</h1>
+      <div class="card" style="padding: 10px; margin-bottom: 10px;">
+        <div class="form-group" style="margin-bottom:6px;">
+          <label>1. Ubicación de Origen</label>
+          <select id="op-origen" class="form-control" onchange="actualizarPanelesTransferencia()"></select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label>2. Ubicación de Destino</label>
+          <select id="op-destino" class="form-control"></select>
+        </div>
+      </div>
+      <div class="ops-split">
+        <div>
+          <h2>Material en Ubicación de Origen</h2>
+          <div id="panel-origen-materiales" class="panel-box"></div>
+        </div>
+      </div>
+      <button class="btn btn-primary" style="margin-top: 12px;" onclick="procesarMovimientoMaterial()"><i class="fa-solid fa-truck-ramp-box"></i> Ejecutar Movimiento Autorizado</button>
+    </section>
+
+    <section id="view-sistema" class="app-view">
+      <h1><i class="fa-solid fa-gears"></i> Sistema y Seguridad</h1>
+      <div class="card">
+        <h2>Copias de Seguridad (Backups)</h2>
+        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">Elige 'Descargar' para guardar en Archivos, o 'Compartir' para enviar por WhatsApp.</p>
+
+        <div style="display:flex; gap:10px; margin-bottom: 10px;">
+          <button class="btn btn-secondary" onclick="descargarBackupLocal()"><i class="fa-solid fa-download"></i> Descargar</button>
+          <button class="btn btn-secondary" onclick="compartirBackupLocal()"><i class="fa-solid fa-share-nodes"></i> Compartir</button>
+        </div>
+
+        <button class="btn btn-secondary" style="margin-bottom: 16px;" onclick="ejecutarCopiaOneDrive()"><i class="fa-solid fa-cloud-arrow-up"></i> Sincronizar en OneDrive</button>
+
+        <div style="border-top: 1px solid var(--border); padding-top: 12px;">
+          <label style="display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:var(--text-secondary)">Restaurar Backup (.json):</label>
+          <!-- Le quitamos el onchange y añadimos un margen debajo -->
+  <input type="file" id="import-file-control" accept=".json" class="form-control" style="margin-bottom: 8px;">
+
+  <!-- NUEVO: Botón explícito para cargar el archivo -->
+  <button class="btn btn-primary" onclick="cargarBackupManual()">
+    <i class="fa-solid fa-upload"></i> Cargar Archivo Seleccionado
+  </button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottom-nav">
+    <a href="#" class="nav-item active" onclick="switchMainView('inventario', this)"><i class="fa-solid fa-boxes-stacked"></i>Inventario</a>
+    <a href="#" class="nav-item" onclick="switchMainView('mapa', this)"><i class="fa-solid fa-map-location-dot"></i>Mapa</a>
+    <a href="#" class="nav-item" onclick="switchMainView('operaciones', this)"><i class="fa-solid fa-right-left"></i>Despliegue</a>
+    <a href="#" class="nav-item" onclick="switchMainView('sistema', this)"><i class="fa-solid fa-gears"></i>Sistema</a>
+  </nav>
+
+  <!-- MODAL DE FORMULARIO COMPARTIDO (CRUD COMPLETO) -->
+  <div id="modal-formulario" class="modal-overlay">
+    <div class="modal-content">
+      <h2 id="formulario-modal-titulo">Nuevo Registro</h2>
+      <form id="form-dinamico" onsubmit="guardarActivo(event)">
+        <input type="hidden" id="form-modo" value="alta">
+        <input type="hidden" id="form-id" value="">
+        <div id="form-dinamico-fields"></div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:14px;">
+          <button type="button" class="btn btn-secondary" onclick="cerrarModal('modal-formulario')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-cantidad-transferencia" class="modal-overlay">
+    <div class="modal-content">
+      <h2>Confirmar Operación</h2>
+      <div class="form-group"><label>Cantidad a Transferir:</label><input type="number" id="txt-cant-mover" class="form-control" min="1" value="1"></div>
+      <div class="form-group"><label>PIN de Confirmación:</label><input type="password" id="txt-pin-firma" class="form-control"></div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:14px;">
+        <button type="button" class="btn btn-secondary" onclick="cerrarModal('modal-cantidad-transferencia')">Abortar</button>
+        <button type="button" class="btn btn-primary" onclick="confirmarYEjecutarTransferenciaObjeto()">Firmar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"></script>
+  <script src="db.js"></script>
+  <script src="sync.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js')); }
+  </script>
+</body>
+</html>
